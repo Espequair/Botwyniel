@@ -3,6 +3,7 @@ from datetime import datetime, date
 from time import sleep
 from threading import Thread
 from random import randrange
+import requests
 
 import discord
 from RiotAPI import RiotAPI
@@ -58,7 +59,9 @@ class Bot(discord.Client):
                          "!8ball": self.eightball,
                          "!dice": self.dice,
                          "!coin": self.coin,
-                         "!suggest": self.suggest
+                         "!suggest": self.suggest,
+                         "!wladd": self.add_whitelist,
+                         "!twadd": self.add_twitch
                          }
         self.commands_help = {"!rank": "Returns the rank of the specified player. If your Discord username is the "
                                        "same as your summoner name, you can use !rank me, *region* instead.",
@@ -164,15 +167,16 @@ class Bot(discord.Client):
         return username, region.lower()
 
     def author_is_admin(self, message):
+        r = requests.get('http://localhost:16359/Whitelist.php').json()
         if type(message.author) == discord.Member:
             if message.channel.server.name == "Etwyniel's":
                 roles = []
                 for r in message.author.roles:
                     roles.append(r.name)
                 return "admin" in roles
-            elif message.author.name in self.whitelist:
+            elif str(message.author.id) in r:
                 return True
-        elif message.author.name in self.whitelist:
+        elif str(message.author.id) in r:
             return True
         else: return False
 
@@ -423,6 +427,49 @@ class Bot(discord.Client):
             self.send_message(message.author, self.commands_help[self.truncate(message.content)])
         else:
             self.send_message(message.author, "Unknown command.")
+
+    def add_whitelist(self, message):
+        if self.author_is_admin(message):
+            username = message.mentions[0].name
+            user_id = message.mentions[0].id
+            query = 'INSERT INTO whitelist (username, id)\
+ VALUES ("{0}", {1})'.format(username, user_id)
+            r = requests.post('http://localhost:16359/MySQL.php',
+             {'query': query})
+            self.send_message(message.channel, r.content.decode())
+            self.log('Added {} to the whitelist.'.format(username))
+        else:
+            self.send_message(message.channel, 'This is an admin only command')
+
+    def add_twitch(self, message):
+        if self.author_is_admin(message):
+            twitch_username = self.truncate(message.content)
+            user = message.author
+            username = user.name
+            id = user.id
+            disc = user.discriminator
+            avatar = user.avatar
+
+            query = "INSERT INTO twitch_follow (\
+twitch_username, \
+discord_username, \
+id, \
+discriminator, \
+avatar) \
+VALUES (\
+'{0}', \
+'{1}', \
+{2}, \
+'{3}', \
+'{4}')".format(twitch_username, username, id, disc, avatar)
+
+            r = requests.post('http://localhost:16359/MySQL.php',
+             {'query': query})
+            self.send_message(message.channel, query)
+            self.send_message(message.channel, r.content.decode())
+            self.log('Added {} to twitch_follow.'.format(username))
+        else:
+            self.send_message(message.channel, 'This is an admin only command')
 
     def log(self, event):
         channel = self.channels[self.servs["Etwyniel's"]]["logs"]
