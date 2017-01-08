@@ -177,6 +177,7 @@ class Bot(discord.Client):
                 else:
                     voice.queue.append((url, info['title']))
                     await self.send_message(message.channel, "Queued `{}`".format(info['title']))
+		self.get_thumbnail(message)
                 return
         await self.send_message(message.channel, 'No voice client on this server (use 0!joinvoice).')
         
